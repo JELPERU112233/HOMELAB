@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Respaldo 3-2-1 · Simulación interactiva (estilo AR)</title>
+<style>
+:root{--bg:#040a16;--cy:#38e8ff;--gr:#3dffa8;--am:#ffb020;--rd:#ff4d6a;--vi:#9a8cff;--tx:#d8ecff;--mut:#86a2bf;--speed:1}
+*{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+html,body{margin:0}
+body{background:radial-gradient(1200px 700px at 25% -10%,#0d2244 0%,var(--bg) 62%);color:var(--tx);min-height:100vh}
+header{padding:18px 24px 6px;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+header h1{margin:0;font-size:22px;letter-spacing:.3px}
+header h1 b{color:var(--cy)}
+header p{margin:0;color:var(--mut);font-size:14px}
+.wrap{display:grid;grid-template-columns:minmax(0,1.75fr) minmax(300px,1fr);gap:18px;padding:12px 24px 28px;max-width:1500px;margin:0 auto}
+@media (min-width:1051px) and (min-height:1050px){.wrap>section{position:sticky;top:12px;align-self:start}}
+@media (max-width:1050px){.wrap{grid-template-columns:1fr}}
+
+/* ===== ESCENARIO AR ===== */
+.stage{position:relative;perspective:1400px;border:1px solid rgba(56,232,255,.3);border-radius:16px;overflow:hidden;background:linear-gradient(180deg,rgba(6,18,38,.92),rgba(3,10,22,.96));box-shadow:0 0 40px rgba(56,232,255,.08) inset}
+.stage .scroll{overflow-x:auto;position:relative;z-index:2}
+.stage video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;z-index:0}
+.stage.ar-on{background:#000}
+.stage.ar-on video{display:block}
+.stage.ar-on::before{content:"";position:absolute;inset:0;background:rgba(2,8,20,.45);z-index:1}
+.grid-floor{position:absolute;inset:0;z-index:1;background-image:linear-gradient(rgba(56,232,255,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(56,232,255,.07) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:radial-gradient(ellipse at center,#000 35%,transparent 85%);mask-image:radial-gradient(ellipse at center,#000 35%,transparent 85%);animation:gridmove 14s linear infinite;pointer-events:none}
+@keyframes gridmove{to{background-position:44px 44px}}
+.scan{position:absolute;left:0;right:0;top:-130px;height:130px;z-index:3;pointer-events:none;background:linear-gradient(180deg,transparent,rgba(56,232,255,.13),transparent);animation:scan 7s linear infinite}
+@keyframes scan{to{top:100%}}
+.corner{position:absolute;width:26px;height:26px;border:2px solid var(--cy);z-index:4;pointer-events:none;opacity:.9}
+.corner.tl{left:10px;top:10px;border-right:0;border-bottom:0}
+.corner.tr{right:10px;top:10px;border-left:0;border-bottom:0}
+.corner.bl{left:10px;bottom:10px;border-right:0;border-top:0}
+.corner.br{right:10px;bottom:10px;border-left:0;border-top:0}
+.hudtxt{position:absolute;left:44px;top:16px;z-index:4;font-size:11px;letter-spacing:1.4px;color:var(--cy);pointer-events:none;text-transform:uppercase}
+.hudtxt i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--gr);margin-right:6px;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+.hudr{position:absolute;right:44px;top:16px;z-index:4;font-size:11px;letter-spacing:1.4px;color:var(--mut);pointer-events:none;text-transform:uppercase}
+.hud{transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .18s ease-out;min-width:760px}
+svg#svg{display:block;width:100%;height:auto}
+svg text{font-family:Arial,Helvetica,sans-serif}
+
+/* ===== ELEMENTOS SVG ===== */
+.zone{fill:rgba(56,232,255,.025);stroke:rgba(56,232,255,.35);stroke-width:1.5;stroke-dasharray:8 7}
+.zone.off{stroke:rgba(154,140,255,.5);fill:rgba(154,140,255,.04)}
+.zlbl{font-size:13px;font-weight:700;letter-spacing:2px;fill:var(--cy);opacity:.85}
+.zone-off-l{fill:var(--vi)}
+.dev{color:var(--cy);outline:none;cursor:pointer;opacity:.32;transition:opacity .6s,color .4s}
+.dev.drive{color:var(--vi)}
+.dev.active,.dev.failed,.dev.warn,.dev.restored{opacity:1}
+.dev.active{filter:drop-shadow(0 0 7px currentColor)}
+.dev.failed{color:var(--rd);filter:drop-shadow(0 0 8px var(--rd))}
+.dev.warn{color:var(--am);filter:drop-shadow(0 0 8px var(--am))}
+.dev.restored{color:var(--gr);filter:drop-shadow(0 0 8px var(--gr))}
+.f-top{fill:currentColor;fill-opacity:.26;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.f-left{fill:currentColor;fill-opacity:.10;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.f-right{fill:currentColor;fill-opacity:.17;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round}
+.f-scr{fill:currentColor;fill-opacity:.38;stroke:currentColor;stroke-width:1;animation:scr 3s ease-in-out infinite}
+@keyframes scr{50%{fill-opacity:.2}}
+.f-line{fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;opacity:.85}
+.led{fill:currentColor;animation:blink 1.1s infinite}
+.led.l2{animation-delay:.4s}
+.bob{animation:bob 4.5s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-6px)}}
+.ring{fill:none;stroke:currentColor;stroke-width:1.6;opacity:0;transform-box:fill-box;transform-origin:center}
+.dev.active .ring{animation:ringp 2.6s ease-out infinite}
+.ring.r2{animation-delay:1.3s!important}
+@keyframes ringp{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.35);opacity:0}}
+.base{fill:none;stroke:currentColor;stroke-width:1;opacity:.5}
+.lbl{fill:var(--tx);font-size:17px;font-weight:700;text-anchor:middle}
+.sub{fill:var(--mut);font-size:13px;text-anchor:middle}
+.tag{opacity:0;transform:translateY(10px);transition:opacity .6s,transform .6s}
+.dev.active .tag,.dev.restored .tag{opacity:1;transform:none}
+.tag rect{fill:#05122a;stroke:currentColor;stroke-width:1.3}
+.tag text{fill:currentColor;font-size:12px;font-weight:700;letter-spacing:1px;text-anchor:middle}
+.reticle{fill:none;stroke:currentColor;stroke-width:2.2;opacity:0;transition:opacity .25s}
+.dev:hover .reticle,.dev:focus-visible .reticle{opacity:.55}
+.dev.sel .reticle{opacity:1;animation:retp 1.6s ease-in-out infinite}
+@keyframes retp{50%{opacity:.5}}
+.xmark,.warnmark,.rewindmark,.okmark{display:none}
+.dev.failed .xmark{display:block;animation:shake .45s linear 2}
+.xmark{stroke:var(--rd);stroke-width:6;stroke-linecap:round;fill:none}
+@keyframes shake{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.dev.warn .warnmark{display:block;animation:blink 1s infinite}
+.warnmark polygon{fill:rgba(255,176,32,.2);stroke:var(--am);stroke-width:3;stroke-linejoin:round}
+.warnmark text{fill:var(--am);font-size:26px;font-weight:700;text-anchor:middle}
+.dev.rewind .rewindmark{display:block}
+.rewindmark{fill:none;stroke:var(--gr);stroke-width:4;stroke-linecap:round}
+.rewindmark .spin{transform-box:fill-box;transform-origin:center;animation:spinr 1.5s linear infinite reverse}
+@keyframes spinr{to{transform:rotate(360deg)}}
+.dev.restored .okmark{display:block;animation:okp 1.2s ease-out 1}
+.okmark{fill:none;stroke:var(--gr);stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
+@keyframes okp{0%{opacity:0;transform:scale(.4)}100%{opacity:1;transform:none}}
+.okmark,.xmark,.warnmark,.rewindmark{transform-box:fill-box;transform-origin:center}
+.flames{display:none}
+svg.fire .dev.failed .flames{display:block}
+.flame{transform-box:fill-box;transform-origin:50% 100%;animation:flick .55s ease-in-out infinite alternate}
+.flame.f2{animation-delay:.2s}.flame.f3{animation-delay:.35s}
+@keyframes flick{from{transform:scaleY(.8) scaleX(1.08)}to{transform:scaleY(1.2) scaleX(.88)}}
+
+svg:not(.remote) .vpnonly{display:none}
+svg.remote .lanonly{display:none}
+.tube{fill:none;stroke:var(--vi);stroke-opacity:0;stroke-width:16;stroke-linecap:round;transition:stroke-opacity .5s}
+.tube.on{stroke-opacity:.17}
+.zi-t{fill:var(--cy);font-size:12px;font-weight:700;letter-spacing:1.5px}
+.zi{fill:var(--mut);font-size:13px}
+.tunx{display:none;stroke:var(--rd);stroke-width:7;stroke-linecap:round;fill:none}
+svg.vpnbroken .tunx{display:block;animation:blink .8s infinite}
+.zone.rem{stroke:rgba(154,140,255,.65);fill:rgba(154,140,255,.04)}
+.zlbl.rem{fill:var(--vi)}
+.trk.zl{stroke-opacity:.5}
+.zdev .tag text{font-size:10px}
+/* flujos de datos (puntos que viajan por CSS: stroke-dashoffset) */
+.trk{fill:none;stroke:var(--cy);stroke-opacity:.2;stroke-width:2;stroke-dasharray:4 7}
+.flow{fill:none;stroke:var(--cy);stroke-width:8;stroke-linecap:round;stroke-dasharray:.1 26;opacity:0;transition:opacity .5s;filter:drop-shadow(0 0 5px var(--cy));animation:dash calc(1.5s / var(--speed)) linear infinite}
+.flow.net{stroke:var(--vi);filter:drop-shadow(0 0 5px var(--vi))}
+.flow.on{opacity:1}
+.flow.restore{stroke:var(--gr);filter:drop-shadow(0 0 6px var(--gr));animation-direction:reverse}
+@keyframes dash{to{stroke-dashoffset:-26.1}}
+.pill{opacity:0;transition:opacity .6s}
+.pill.on{opacity:1}
+.pill rect{fill:#05122a;stroke:var(--cy);stroke-opacity:.6;stroke-width:1.2}
+.pill.net rect{stroke:var(--vi)}
+.pill text{fill:var(--tx);font-size:12px;font-weight:700;text-anchor:middle}
+
+/* ===== CONTROLES / PANEL ===== */
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+.btn{background:#06182e;color:var(--cy);border:1px solid rgba(56,232,255,.5);border-radius:10px;padding:10px 14px;font-weight:700;font-size:14px;cursor:pointer;transition:background .2s,transform .1s}
+.btn:hover{background:#0a2646}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--cy);color:#03101f}
+.btn.primary:hover{background:#7df0ff}
+.btn.danger{border-color:rgba(255,77,106,.6);color:#ff90a3}
+.btn.danger:hover{background:#2a0e1c}
+.btn.ok{border-color:rgba(61,255,168,.6);color:var(--gr)}
+.seg{display:flex;align-items:center;gap:6px;color:var(--mut);font-size:13px}
+.btn.act{background:var(--cy);color:#03101f}
+.speed{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:13px}
+.speed input{accent-color:var(--cy)}
+.callout{position:relative;z-index:5;margin:0 40px 28px;padding:10px 14px;border:1px solid rgba(56,232,255,.35);border-left:3px solid var(--cy);background:rgba(4,14,30,.85);border-radius:10px;font-size:13.5px;line-height:1.45;min-height:64px}
+.callout b{display:block;color:var(--cy);margin-bottom:2px;font-size:14px}
+.callout.am{border-left-color:var(--am)}.callout.am b{color:var(--am)}
+.callout.gr{border-left-color:var(--gr)}.callout.gr b{color:var(--gr)}
+.card{background:rgba(8,20,40,.72);border:1px solid rgba(56,232,255,.25);border-radius:14px;padding:14px 16px;margin-bottom:12px}
+.card h2{margin:0 0 8px;font-size:15px;letter-spacing:.4px;color:var(--cy)}
+.card p{margin:0 0 8px;font-size:14px;line-height:1.5}
+.card p:last-child{margin-bottom:0}
+.card small,.muted{color:var(--mut);font-size:12.5px;line-height:1.45}
+.rule{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0}
+.rule div{border:1px solid rgba(56,232,255,.3);border-radius:10px;padding:8px 6px;text-align:center}
+.rule b{display:block;font-size:26px;color:var(--cy);line-height:1}
+.rule span{font-size:12px;color:var(--mut)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{flex:1 1 120px;display:flex;align-items:center;gap:8px;text-align:left;background:#06182e;color:var(--mut);border:1px solid rgba(56,232,255,.25);border-radius:10px;padding:8px 10px;font-size:12.5px;font-weight:700;cursor:pointer}
+.chip i{font-style:normal;display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid currentColor;flex:none;font-size:12px}
+.chip.done{color:var(--gr);border-color:rgba(61,255,168,.4)}
+.chip.cur{color:#03101f;background:var(--cy);border-color:var(--cy)}
+.score{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.badge{border:1px solid rgba(134,162,191,.35);border-radius:10px;padding:8px 6px;text-align:center;transition:all .4s}
+.badge b{display:block;font-size:24px;line-height:1.1}
+.badge span{font-size:11.5px;color:var(--mut)}
+.badge.ok{border-color:var(--gr);box-shadow:0 0 12px rgba(61,255,168,.35);color:var(--gr)}
+.banner{display:none;margin-top:8px;padding:8px 10px;border-radius:10px;background:rgba(61,255,168,.1);border:1px solid rgba(61,255,168,.5);color:var(--gr);font-size:13.5px;font-weight:700}
+.banner.show{display:block}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+#dRes{display:none;border-left:3px solid var(--am);padding:4px 0 4px 10px;margin:10px 0}
+#dRes.show{display:block}
+#dRes.good{border-left-color:var(--gr)}
+#dNote{color:var(--gr);font-size:13px;font-weight:700;min-height:18px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0a2646;border:1px solid var(--cy);color:var(--tx);padding:10px 16px;border-radius:10px;font-size:13.5px;max-width:90vw;opacity:0;pointer-events:none;transition:opacity .3s;z-index:99}
+.toast.show{opacity:1}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--mut);margin-top:10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.001s!important;animation-iteration-count:1!important}.hud{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Respaldo <b>3-2-1</b> · simulación interactiva</h1>
+  <p>Toca un dispositivo, avanza paso a paso o simula un desastre para ver cómo se protegen tus datos.</p>
+</header>
+
+<div class="wrap">
+  <section>
+    <div class="stage" id="stage">
+      <video id="cam" autoplay playsinline muted></video>
+      <div class="grid-floor"></div>
+      <div class="scan"></div>
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+      <div class="hudtxt"><i></i>AR · vista holográfica</div>
+      <div class="hudr">Respaldo 3-2-1</div>
+      <div class="scroll"><div class="hud" id="hud">
+<svg id="svg" viewBox="0 0 1100 860" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Diagrama del respaldo 3-2-1 con Internet, VPN y unidad Z:">
+  <defs>
+    <pattern id="iso" width="60" height="30" patternUnits="userSpaceOnUse"><path d="M0,0 L60,30 M60,0 L0,30" stroke="rgba(56,232,255,.10)" fill="none"/></pattern>
+    <linearGradient id="flameg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff3b1f"/><stop offset=".6" stop-color="#ff9a1f"/><stop offset="1" stop-color="#ffe07a"/></linearGradient>
+    <g id="g-laptop">
+      <polygon class="f-top" points="0,-12 52,10 0,32 -52,10"/>
+      <polygon class="f-left" points="-52,10 0,32 0,38 -52,16"/>
+      <polygon class="f-right" points="0,32 52,10 52,16 0,38"/>
+      <polygon class="f-top" points="-52,10 0,-12 0,-62 -52,-40"/>
+      <polygon class="f-scr" points="-46,2.5 -6,-14.5 -6,-54.5 -46,-37.5"/>
+      <path class="f-line" d="M-18,10 L18,25 M-6,6 L26,19"/>
+    </g>
+    <g id="g-server">
+      <polygon class="f-top" points="0,-50 64,-20 0,10 -64,-20"/>
+      <polygon class="f-left" points="-64,-20 0,10 0,90 -64,60"/>
+      <polygon class="f-right" points="0,10 64,-20 64,60 0,90"/>
+      <path class="f-line" d="M-56,-2.3 L-8,20.3 M-56,15.7 L-8,38.3 M-56,33.7 L-8,56.3 M-56,51.7 L-8,74.3"/>
+      <path class="f-line" d="M12,18 L52,-1 M12,32 L52,13"/>
+      <circle class="led" cx="50" cy="40" r="3"/><circle class="led l2" cx="38" cy="46" r="3"/>
+    </g>
+    <g id="g-nas">
+      <polygon class="f-top" points="0,-30 46,-8 0,14 -46,-8"/>
+      <polygon class="f-left" points="-46,-8 0,14 0,60 -46,38"/>
+      <polygon class="f-right" points="0,14 46,-8 46,38 0,60"/>
+      <path class="f-line" d="M-40,6.9 L-6,23.1 M-40,20.9 L-6,37.1 M-40,34.9 L-6,51.1"/>
+      <circle class="led" cx="30" cy="26" r="3"/>
+    </g>
+    <g id="g-zdrv">
+      <polygon class="f-top" points="0,-14 30,0 0,14 -30,0"/>
+      <polygon class="f-left" points="-30,0 0,14 0,26 -30,12"/>
+      <polygon class="f-right" points="0,14 30,0 30,12 0,26"/>
+      <ellipse class="f-line" cx="0" cy="0" rx="12" ry="5.5"/>
+      <circle class="led" cx="22" cy="11" r="2.2"/>
+    </g>
+    <path id="g-cloudp" class="f-top" d="M-70,30 C-96,30 -96,-4 -66,-8 C-66,-42 -22,-54 0,-30 C20,-56 72,-46 68,-10 C100,-8 98,30 70,30 Z"/>
+    <g id="g-cloud"><use href="#g-cloudp"/><path class="f-line" d="M-20,12 L0,-6 L20,12 M0,-6 L0,24"/></g>
+    <g id="flame"><path d="M0,0 C-12,-12 -6,-26 0,-44 C4,-30 16,-18 12,-8 C10,-2 4,0 0,0Z" fill="url(#flameg)"/></g>
+  </defs>
+
+  <!-- zonas -->
+  <rect class="zone" x="20" y="70" width="580" height="370" rx="18"/>
+  <rect x="20" y="70" width="580" height="370" rx="18" fill="url(#iso)"/>
+  <text class="zlbl" x="42" y="100">SITIO LOCAL · EN CASA</text>
+  <rect class="zone off" x="660" y="70" width="420" height="370" rx="18"/>
+  <text class="zlbl zone-off-l" x="682" y="100">FUERA DE CASA · OFFSITE</text>
+  <rect id="band" class="zone" x="20" y="600" width="1060" height="240" rx="18"/>
+  <rect x="20" y="600" width="1060" height="240" rx="18" fill="url(#iso)"/>
+  <text id="bandLbl" class="zlbl" x="1058" y="628" text-anchor="end">TUS LAPTOPS · EN CASA (WiFi / red local)</text>
+
+  <!-- explicación Z: -->
+  <g class="zinfo">
+    <text x="700" y="672" class="zi-t">¿QUÉ ES LA UNIDAD Z:?</text>
+    <text x="700" y="696" class="zi">Es la carpeta “backups” del servidor,</text>
+    <text x="700" y="714" class="zi">montada como un disco más en tu laptop.</text>
+    <text x="700" y="738" class="zi">En casa llega por la red local (WiFi).</text>
+    <text x="700" y="756" class="zi">Fuera de casa solo llega por el túnel VPN.</text>
+  </g>
+
+  <!-- rutas (base) -->
+  <g>
+    <path class="trk lanonly" d="M150,675 C60,610 70,330 178,292"/>
+    <path class="trk lanonly" d="M452,675 C430,580 445,440 306,296"/>
+    <path class="tube vpnonly" id="tb-v1a" d="M180,690 C300,690 420,610 514,540"/>
+    <path class="tube vpnonly" id="tb-v1b" d="M476,688 C520,650 560,600 590,566"/>
+    <path class="tube vpnonly" id="tb-v2" d="M524,492 C440,450 380,380 306,300"/>
+    <path class="trk vpnonly" d="M180,690 C300,690 420,610 514,540"/>
+    <path class="trk vpnonly" d="M476,688 C520,650 560,600 590,566"/>
+    <path class="trk vpnonly" d="M524,492 C440,450 380,380 306,300"/>
+    <path class="trk" d="M308,268 C360,280 400,250 448,262"/>
+    <path class="trk" d="M540,262 C580,300 590,400 580,468"/>
+    <path class="trk" d="M730,488 C780,440 800,360 810,286"/>
+    <path class="trk zl" d="M224,748 L262,752"/><path class="trk zl" d="M524,748 L562,752"/>
+
+    <path id="fl-f1a" class="flow lanonly" d="M150,675 C60,610 70,330 178,292"/>
+    <path id="fl-f1b" class="flow lanonly" d="M452,675 C430,580 445,440 306,296"/>
+    <path id="fl-v1a" class="flow net vpnonly" d="M180,690 C300,690 420,610 514,540"/>
+    <path id="fl-v1b" class="flow net vpnonly" d="M476,688 C520,650 560,600 590,566"/>
+    <path id="fl-v2" class="flow net vpnonly" d="M524,492 C440,450 380,380 306,300"/>
+    <path id="fl-f2" class="flow" d="M308,268 C360,280 400,250 448,262"/>
+    <path id="fl-f3a" class="flow net" d="M540,262 C580,300 590,400 580,468"/>
+    <path id="fl-f3b" class="flow net" d="M730,488 C780,440 800,360 810,286"/>
+  </g>
+  <g id="pl-lan" class="pill lanonly"><rect x="30" y="488" width="160" height="24" rx="12"/><text x="110" y="504">Syncthing · red local</text></g>
+  <g id="pl-vpn" class="pill net vpnonly"><rect x="220" y="653" width="170" height="24" rx="12"/><text x="305" y="669">Túnel VPN · Tailscale</text></g>
+  <g id="pl-rs" class="pill"><rect x="318" y="290" width="120" height="24" rx="12"/><text x="378" y="306">rsync · cada 3 h</text></g>
+  <g id="pl-net" class="pill net"><rect x="730" y="385" width="110" height="24" rx="12"/><text x="785" y="401">Internet · nube</text></g>
+  <g id="tunX" class="tunx" transform="translate(411,410)"><path d="M-18,-18 L18,18 M18,-18 L-18,18"/></g>
+
+  <!-- dispositivos -->
+  <g class="dev" id="d-srv" transform="translate(240,250)" tabindex="0" role="button" aria-label="Servidor Proxmox con TrueNAS, copia 2">
+    <ellipse class="ring" cx="0" cy="62" rx="88" ry="30"/><ellipse class="ring r2" cx="0" cy="62" rx="88" ry="30"/>
+    <g class="bob" style="animation-delay:-.9s"><use href="#g-server"/></g>
+    <g class="tag"><rect x="-41" y="-90" width="82" height="22" rx="11"/><text x="0" y="-75">COPIA 2</text></g>
+    <text class="lbl" x="0" y="136">Servidor Proxmox + TrueNAS</text><text class="sub" x="0" y="154">Disco HDD con ZFS · snapshots</text>
+    <g class="xmark" style="transform:translateY(24px)"><path d="M-36,-40 L36,30 M36,-40 L-36,30"/></g>
+    <g class="warnmark" style="transform:translateY(20px)"><polygon points="0,-62 30,-12 -30,-12"/><text x="0" y="-20">!</text></g>
+    <g class="rewindmark" style="transform:translateY(22px)"><g class="spin"><path d="M-30,0 A30,30 0 1 1 -8,28"/><polygon points="-8,28 -22,32 -14,16" fill="#3dffa8" stroke="none"/></g></g>
+    <g class="okmark" style="transform:translateY(22px)"><path d="M-28,-6 L-8,16 L30,-34"/></g>
+    <g class="flames"><use class="flame" href="#flame" transform="translate(-50,72) scale(1.6)"/><use class="flame f2" href="#flame" transform="translate(0,92) scale(2)"/><use class="flame f3" href="#flame" transform="translate(50,70) scale(1.5)"/></g>
+  </g>
+  <g class="dev" id="d-nas" transform="translate(490,250)" tabindex="0" role="button" aria-label="NAS TerraMaster, copia 3">
+    <ellipse class="ring" cx="0" cy="40" rx="66" ry="22"/><ellipse class="ring r2" cx="0" cy="40" rx="66" ry="22"/>
+    <g class="bob" style="animation-delay:-2.7s"><use href="#g-nas"/></g>
+    <g class="tag"><rect x="-41" y="-66" width="82" height="22" rx="11"/><text x="0" y="-51">COPIA 3</text></g>
+    <text class="lbl" x="0" y="96">NAS TerraMaster</text><text class="sub" x="0" y="114">Otro equipo · disco HDD</text>
+    <g class="xmark" style="transform:translateY(6px)"><path d="M-28,-30 L28,26 M28,-30 L-28,26"/></g>
+    <g class="okmark" style="transform:translateY(4px)"><path d="M-22,-8 L-6,10 L24,-26"/></g>
+    <g class="flames"><use class="flame" href="#flame" transform="translate(-30,50) scale(1.3)"/><use class="flame f2" href="#flame" transform="translate(6,58) scale(1.6)"/><use class="flame f3" href="#flame" transform="translate(38,46)"/></g>
+  </g>
+  <g class="dev drive" id="d-drv" transform="translate(870,250)" tabindex="0" role="button" aria-label="Google Drive, copia externa">
+    <ellipse class="ring" cx="0" cy="58" rx="94" ry="22"/><ellipse class="ring r2" cx="0" cy="58" rx="94" ry="22"/>
+    <g class="bob" style="animation-delay:-1.2s"><use href="#g-cloud"/></g>
+    <g class="tag"><rect x="-72" y="-92" width="144" height="22" rx="11"/><text x="0" y="-77">COPIA 4 · EXTERNA</text></g>
+    <text class="lbl" x="0" y="104">Google Drive</text><text class="sub" x="0" y="122">Nube · fuera de casa</text>
+  </g>
+  <g class="dev drive" id="d-net" transform="translate(630,525)" tabindex="0" role="button" aria-label="Internet">
+    <ellipse class="ring" cx="0" cy="40" rx="140" ry="26"/><ellipse class="ring r2" cx="0" cy="40" rx="140" ry="26"/>
+    <g class="bob" style="animation-delay:-3s"><g transform="scale(1.25)"><use href="#g-cloudp"/></g></g>
+    <text class="lbl" x="0" y="-6" style="font-size:19px;letter-spacing:2px">INTERNET</text><text class="sub" x="0" y="12">red pública</text>
+  </g>
+  <g class="dev" id="d-lap1" transform="translate(170,735)" tabindex="0" role="button" aria-label="Laptop Dell Latitude 5431, datos originales">
+    <ellipse class="ring" cx="0" cy="26" rx="70" ry="24"/><ellipse class="ring r2" cx="0" cy="26" rx="70" ry="24"/>
+    <g class="bob"><use href="#g-laptop"/></g>
+    <g class="tag"><rect x="-46" y="-104" width="92" height="22" rx="11"/><text x="0" y="-89">ORIGINAL</text></g>
+    <text class="lbl" x="0" y="84">Dell Latitude 5431</text><text class="sub" x="0" y="102">Original · disco SSD</text>
+    <g class="xmark"><path d="M-30,-40 L30,20 M30,-40 L-30,20"/></g>
+    <g class="warnmark"><polygon points="0,-62 28,-14 -28,-14"/><text x="0" y="-22">!</text></g>
+    <g class="okmark"><path d="M-24,-14 L-6,4 L26,-34"/></g>
+    <g class="flames"><use class="flame" href="#flame" transform="translate(-34,40) scale(1.2)"/><use class="flame f2" href="#flame" transform="translate(0,46) scale(1.5)"/><use class="flame f3" href="#flame" transform="translate(36,38)"/></g>
+  </g>
+  <g class="dev" id="d-lap2" transform="translate(470,735)" tabindex="0" role="button" aria-label="ThinkPad L14, datos originales">
+    <ellipse class="ring" cx="0" cy="26" rx="70" ry="24"/><ellipse class="ring r2" cx="0" cy="26" rx="70" ry="24"/>
+    <g class="bob" style="animation-delay:-1.8s"><use href="#g-laptop"/></g>
+    <g class="tag"><rect x="-46" y="-104" width="92" height="22" rx="11"/><text x="0" y="-89">ORIGINAL</text></g>
+    <text class="lbl" x="0" y="84">ThinkPad L14</text><text class="sub" x="0" y="102">Original · disco SSD</text>
+    <g class="xmark"><path d="M-30,-40 L30,20 M30,-40 L-30,20"/></g>
+    <g class="okmark"><path d="M-24,-14 L-6,4 L26,-34"/></g>
+    <g class="flames"><use class="flame" href="#flame" transform="translate(-34,40) scale(1.2)"/><use class="flame f2" href="#flame" transform="translate(0,46) scale(1.5)"/><use class="flame f3" href="#flame" transform="translate(36,38)"/></g>
+  </g>
+  <g class="dev zdev" id="d-z1" transform="translate(292,752)" tabindex="0" role="button" aria-label="Unidad Z: de la laptop Dell">
+    <ellipse class="ring" cx="0" cy="18" rx="40" ry="14"/>
+    <g class="bob" style="animation-delay:-.6s"><use href="#g-zdrv"/></g>
+    <g class="tag"><rect x="-52" y="-52" width="104" height="20" rx="10"/><text x="0" y="-38">UNIDAD REMOTA</text></g>
+    <text class="lbl" x="0" y="50" style="font-size:18px">Z:</text><text class="sub" x="0" y="66">backups</text>
+    <g class="xmark" style="transform:translateY(6px)"><path d="M-20,-18 L20,18 M20,-18 L-20,18"/></g>
+    <g class="okmark" style="transform:translateY(4px)"><path d="M-16,-2 L-4,10 L18,-16"/></g>
+  </g>
+  <g class="dev zdev" id="d-z2" transform="translate(592,752)" tabindex="0" role="button" aria-label="Unidad Z: de la laptop ThinkPad">
+    <ellipse class="ring" cx="0" cy="18" rx="40" ry="14"/>
+    <g class="bob" style="animation-delay:-2.2s"><use href="#g-zdrv"/></g>
+    <g class="tag"><rect x="-52" y="-52" width="104" height="20" rx="10"/><text x="0" y="-38">UNIDAD REMOTA</text></g>
+    <text class="lbl" x="0" y="50" style="font-size:18px">Z:</text><text class="sub" x="0" y="66">backups</text>
+    <g class="xmark" style="transform:translateY(6px)"><path d="M-20,-18 L20,18 M20,-18 L-20,18"/></g>
+    <g class="okmark" style="transform:translateY(4px)"><path d="M-16,-2 L-4,10 L18,-16"/></g>
+  </g>
+</svg>
+      </div></div>
+      <div class="callout" id="callout"><b id="coT">Toca un equipo del diagrama</b><span id="coD">Aquí verás qué hace cada pieza y de qué te protege.</span></div>
+    </div>
+
+    <div class="controls">
+      <span class="seg">Laptops:<button class="btn act" data-loc="home">🏠 En casa</button><button class="btn" data-loc="remote">🌐 Fuera de casa</button></span>
+      <button class="btn primary" id="bPlay">▶ Reproducir</button>
+      <button class="btn" id="bPrev">⏮ Anterior</button>
+      <button class="btn" id="bNext">Siguiente ⏭</button>
+      <button class="btn" id="bReset">↺ Reiniciar</button>
+      <button class="btn" id="bCam" title="Usa la cámara del equipo como fondo">📷 Modo AR con cámara</button>
+      <label class="speed">Velocidad <input id="spd" type="range" min=".5" max="2" step=".25" value="1"><span id="spdv">1×</span></label>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--cy)"></i>Datos copiándose</span>
+      <span><i style="background:var(--vi)"></i>Salen de casa por Internet</span>
+      <span><i style="background:var(--gr)"></i>Restauración</span>
+      <span><i style="background:var(--rd)"></i>Fallo</span>
+      <span><i style="background:var(--am)"></i>Dato dañado</span>
+    </div>
+  </section>
+
+  <aside>
+    <div class="card">
+      <h2>¿Qué es la regla 3-2-1?</h2>
+      <p>Es una forma sencilla de no perder tus archivos. Consiste en tener:</p>
+      <div class="rule"><div><b>3</b><span>copias de tus datos</span></div><div><b>2</b><span>tipos de medio distintos</span></div><div><b>1</b><span>copia fuera de casa</span></div></div>
+      <p><b>¿Para qué sirve?</b> Para que un solo problema (un disco dañado, un robo, un incendio, un borrado por error o un virus) nunca se lleve todas tus copias a la vez.</p>
+    </div>
+
+    <div class="card">
+      <h2>Paso a paso</h2>
+      <div class="chips" id="chips"></div>
+      <div class="score">
+        <div class="badge" id="bCop"><b>1</b><span>COPIAS · mín. 3</span></div>
+        <div class="badge" id="bMed"><b>1</b><span>MEDIOS · mín. 2</span></div>
+        <div class="badge" id="bExt"><b>0</b><span>EXTERNA · mín. 1</span></div>
+      </div>
+      <p id="stT" style="font-weight:700;font-size:15px"></p>
+      <p id="stD"></p>
+      <div class="banner" id="banner">✔ Regla 3-2-1 cumplida (y con una copia de más)</div>
+    </div>
+
+    <div class="card">
+      <h2>¿Cómo llega la unidad Z: a tus laptops?</h2>
+      <p><b>En casa:</b> la laptop está en la misma red que el servidor y abre Z: directo por WiFi.</p>
+      <p><b>Fuera de casa:</b> el tráfico sale por Internet dentro de un túnel cifrado (VPN con Tailscale) hasta el servidor. Cambia el selector “Laptops” para verlo.</p>
+      <p class="muted">Si el túnel cae, Z: muestra una X roja, aunque en casa siga funcionando.</p>
+    </div>
+
+    <div class="card">
+      <h2>Simular un desastre</h2>
+      <p class="muted">Elige qué sale mal y mira de dónde se recuperan los datos.</p>
+      <div class="dgrid">
+        <button class="btn danger" data-sc="lap">💻 Se daña una laptop</button>
+        <button class="btn danger" data-sc="srv">🖥 Falla el servidor</button>
+        <button class="btn danger" data-sc="ran">🦠 Borrado o virus</button>
+        <button class="btn danger" data-sc="fire">🔥 Incendio en casa</button>
+        <button class="btn danger" data-sc="vpn" style="grid-column:1/-1">🔑 Se cae la VPN (clave caducada)</button>
+      </div>
+      <div id="dRes"><p id="dMsg"></p></div>
+      <div id="dNote"></div>
+      <div class="controls" style="margin-top:6px">
+        <button class="btn ok" id="bRest" disabled>♻ Restaurar datos</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Fuentes y alcance</h2>
+      <p class="muted">• La regla 3-2-1 es conocimiento general de buenas prácticas de respaldo (de mi entrenamiento; suele atribuirse al fotógrafo Peter Krogh). Hoy se habla también de variantes más estrictas.</p>
+      <p class="muted">• La cadena laptops → servidor → NAS → nube sale de tus notas del homelab: Syncthing, rsync cada 3 horas, NAS TerraMaster y Google Drive. Esos datos pueden haber cambiado; revisa tu configuración real.</p>
+      <p class="muted">• La unidad Z: (carpeta “backups” del servidor) y la VPN con Tailscale salen de lo que me mostraste; el caso de la clave caducada se basa en el problema que acabamos de diagnosticar. Es una simulación didáctica: no lee datos en vivo de tus equipos, y los resultados de los desastres son ilustrativos. Verifica con una restauración de prueba.</p>
+    </div>
+  </aside>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(s){return document.querySelector(s)},$$=function(s){return Array.prototype.slice.call(document.querySelectorAll(s))};
+var svg=$('#svg'),stage=$('#stage'),root=document.documentElement;
+var D={lap1:$('#d-lap1'),lap2:$('#d-lap2'),srv:$('#d-srv'),nas:$('#d-nas'),drv:$('#d-drv'),z1:$('#d-z1'),z2:$('#d-z2'),net:$('#d-net')};
+var PH=['f1a','f1b','v1a','v1b','v2','f2','f3a','f3b'],F={},TB={};
+PH.forEach(function(id){F[id]=$('#fl-'+id);TB[id]=$('#tb-'+id)});
+var PILL={lan:$('#pl-lan'),vpn:$('#pl-vpn'),rs:$('#pl-rs'),net:$('#pl-net')};
+/* un flujo lógico usa rutas físicas distintas según estés en casa (LAN) o fuera (VPN por Internet) */
+var MAP={f1a:{lan:['f1a'],vpn:['v1a','v2']},f1b:{lan:['f1b'],vpn:['v1b','v2']},f2:{lan:['f2'],vpn:['f2']},f3:{lan:['f3a','f3b'],vpn:['f3a','f3b']},vpn:{lan:['v1a','v1b','v2'],vpn:['v1a','v1b','v2']}};
+
+var STEPS=[
+ {t:'1 · El dato original',s:'Original',d:'Todo empieza con tus archivos de trabajo en las laptops (disco SSD). Si solo existiera esta copia, un disco dañado, un robo o un borrado por error significaría perderlo todo. Por eso se respalda.'},
+ {t:'2 · Copia en el servidor de casa',s:'Servidor',d:'Syncthing sincroniza las carpetas de las laptops con el servidor (TrueNAS dentro de Proxmox) casi en tiempo real. Es otro equipo y otro tipo de disco (HDD con ZFS y snapshots), así que ya tienes 2 medios distintos. Además aparece la unidad Z: en cada laptop, que abre la carpeta backups del servidor. Se usa para recuperar rápido.'},
+ {t:'3 · Copia en el NAS TerraMaster',s:'NAS',d:'Cada cierto tiempo (según tus notas, cada 3 horas) rsync copia del servidor al NAS TerraMaster, un equipo físico distinto. Si el servidor falla por completo, el NAS conserva los datos. Aquí ya cumples las 3 copias.'},
+ {t:'4 · Copia fuera de casa (Google Drive)',s:'Nube',d:'Una copia sale de casa por Internet hacia la nube. Protege contra incendio, robo, inundación o cualquier problema que afecte a todo el domicilio. Cumple el “1 fuera de casa”. Tu cadena tiene 4 copias en total: supera el mínimo.'}
+];
+var INFO={
+ lap1:['Dell Latitude 5431 · el dato original','Aquí trabajas y guardas tus archivos (disco SSD). Es la primera copia. Syncthing la envía al servidor, ya sea por la red local o por la VPN si estás fuera de casa.'],
+ lap2:['ThinkPad L14 · el dato original','Segunda laptop con archivos de trabajo (disco SSD). También sincroniza con el servidor y tiene su propia unidad Z:.'],
+ srv:['Servidor Proxmox + TrueNAS · copia 2','Recibe los archivos de las laptops. Usa discos HDD con ZFS y snapshots programados (versiones anteriores guardadas). Comparte la carpeta backups que las laptops ven como unidad Z:. No protege de un desastre que afecte a toda la casa.'],
+ nas:['NAS TerraMaster · copia 3','Equipo independiente que recibe una copia periódica del servidor (rsync). Protege si el servidor se daña por completo. Sigue estando en casa, así que tampoco resiste un incendio o un robo.'],
+ drv:['Google Drive · copia externa','Copia en la nube, fuera de tu domicilio. Es la que te salva de un incendio, robo o inundación. Depende de tu conexión a Internet para subir y bajar los datos.'],
+ net:['Internet','Red pública que lo une todo. Sube la copia externa a la nube y, cuando estás fuera de casa, transporta tu conexión cifrada (túnel VPN con Tailscale) hasta el servidor. Sin túnel, el servidor de casa no es accesible desde fuera.'],
+ z1:['Unidad Z: en la laptop Dell','Es la carpeta backups del servidor montada como un disco de red. En casa se llega por la red local; fuera de casa solo funciona si el túnel VPN está activo. Sirve para abrir tus respaldos como si fueran un disco más.'],
+ z2:['Unidad Z: en la ThinkPad','Igual que en la otra laptop: acceso a la carpeta backups del servidor. Si ves una X roja fuera de casa, normalmente la VPN no está conectada.']
+};
+var SC={
+ lap:{t:'Escenario: se daña o roban una laptop',fail:['lap1'],mark:'failed',msg:'La laptop Dell se pierde. Los datos siguen en el servidor (copia 2), en el NAS (copia 3) y en la nube (copia 4). Lo más rápido es recuperar desde el servidor.',
+  restore:[{flows:['f1a'],heal:['lap1'],note:'Copiando desde el servidor a la laptop nueva…'}],done:'Datos recuperados desde el servidor.'},
+ srv:{t:'Escenario: falla el servidor',fail:['srv'],mark:'failed',msg:'El servidor deja de funcionar. Las laptops aún tienen el original y el NAS TerraMaster guarda la copia 3. Al reparar o reemplazar el servidor se repone desde el NAS.',
+  restore:[{flows:['f2'],heal:['srv'],note:'Reponiendo el servidor desde el NAS…'}],done:'Servidor repuesto desde el NAS.'},
+ ran:{t:'Escenario: borrado por error o virus',fail:['lap1','srv'],mark:'warn',msg:'Un virus o un borrado por error daña archivos en la laptop y la sincronización los copia al servidor: sincronizar no es respaldar. Los snapshots de ZFS (versiones anteriores del servidor) permiten volver atrás. Comprueba hasta qué fecha conservan versiones tus copias antes de depender de ellas.',
+  restore:[{fx:'rewind',heal:['srv'],note:'Volviendo a un snapshot anterior al daño…'},{flows:['f1a'],heal:['lap1'],note:'Restaurando archivos sanos en la laptop…'}],done:'Archivos sanos recuperados desde un snapshot.'},
+ fire:{t:'Escenario: incendio o robo en casa',fail:['lap1','lap2','srv','nas'],mark:'failed',fire:true,msg:'Todo lo que estaba en casa se pierde. Solo sobrevive la copia externa en Google Drive. Sin esa copia no habría forma de recuperar los datos: por eso existe el “1 fuera de casa”.',
+  restore:[{flows:['f3'],heal:['nas'],note:'Bajando datos desde la nube hacia un NAS nuevo…'},{flows:['f2'],heal:['srv'],note:'Reconstruyendo el servidor desde el NAS…'},{flows:['f1a','f1b'],heal:['lap1','lap2'],note:'Devolviendo archivos a las laptops nuevas…'}],done:'Todo recuperado desde la copia externa.'},
+ vpn:{t:'Escenario: se cae la VPN (clave caducada)',forceRemote:true,fail:['z1','z2'],mark:'failed',broken:true,msg:'Con las laptops fuera de casa, el servidor desaparece de la VPN porque la clave de su nodo caducó. En casa todo sigue funcionando por la red local, pero Z: no abre desde fuera. Se arregla reautenticando el servidor (tailscale up) y desactivando la caducidad de la clave.',
+  restore:[{flows:['vpn'],heal:['z1','z2'],unbreak:true,note:'Reautenticando el servidor y reabriendo el túnel VPN…'}],done:'Túnel VPN restablecido y Z: disponible de nuevo.'}
+};
+function scFor(k){
+  var s=SC[k];
+  if(k==='fire'&&remote){
+    return {t:s.t,fail:['srv','nas'],mark:'failed',fire:true,
+      msg:'Se incendia la casa y el servidor y el NAS se pierden. Tus laptops estaban fuera de casa y conservan los originales, y además queda la copia externa en Google Drive. Con el 3-2-1 siempre queda al menos una copia sana.',
+      restore:s.restore.slice(0,2),done:'Servidor y NAS repuestos desde la copia externa.'};
+  }
+  return s;
+}
+
+var step=0,playing=false,timer=null,mode='normal',rtimers=[],sel=null,remote=false;
+function spd(){return parseFloat($('#spd').value)||1}
+function clearRT(){rtimers.forEach(clearTimeout);rtimers=[]}
+function cls(el,c,on){el.classList[on?'add':'remove'](c)}
+var DEF=['Toca un equipo del diagrama','Aquí verás qué hace cada pieza y de qué te protege.'];
+function say(t,d,k){$('#coT').textContent=t;$('#coD').textContent=d;$('#callout').className='callout'+(k?' '+k:'')}
+
+function phys(list){var s={};list.forEach(function(f){((MAP[f]||{})[remote?'vpn':'lan']||[f]).forEach(function(q){s[q]=1})});return s}
+function renderFlows(on,rest){
+  var a=phys(on),r=phys(rest||[]);
+  PH.forEach(function(id){
+    var any=a[id]||r[id];
+    cls(F[id],'on',!!any);cls(F[id],'restore',!!r[id]);
+    if(TB[id])cls(TB[id],'on',!!any);
+  });
+  cls(PILL.lan,'on',!!(a.f1a||a.f1b));cls(PILL.vpn,'on',!!a.v2);cls(PILL.rs,'on',!!a.f2);cls(PILL.net,'on',!!a.f3b);
+}
+function flowsFor(n){var l=[];if(n>=1)l.push('f1a','f1b');if(n>=2)l.push('f2');if(n>=3)l.push('f3');return l}
+
+/* retículas AR a partir del tamaño real de cada dispositivo */
+Object.keys(D).forEach(function(k){
+  var el=D[k],bob=el.querySelector('.bob'),bb=bob.getBBox(),p=12;
+  var x1=bb.x-p,y1=bb.y-p,x2=bb.x+bb.width+p,y2=bb.y+bb.height+p,L=14;
+  var d='M'+x1+','+(y1+L)+' V'+y1+' H'+(x1+L)+' M'+(x2-L)+','+y1+' H'+x2+' V'+(y1+L)+' M'+x2+','+(y2-L)+' V'+y2+' H'+(x2-L)+' M'+(x1+L)+','+y2+' H'+x1+' V'+(y2-L);
+  var r=document.createElementNS('http://www.w3.org/2000/svg','path');r.setAttribute('class','reticle');r.setAttribute('d',d);el.appendChild(r);
+  el.addEventListener('click',function(){select(k)});
+  el.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();select(k)}});
+});
+function select(k){
+  Object.keys(D).forEach(function(n){cls(D[n],'sel',n===k)});sel=k;
+  say(INFO[k][0],INFO[k][1]);
+}
+
+STEPS.forEach(function(s,i){
+  var b=document.createElement('button');b.className='chip';b.dataset.i=i;b.innerHTML='<i>'+(i+1)+'</i>'+s.s;
+  b.addEventListener('click',function(){stopPlay();setStep(i)});$('#chips').appendChild(b);
+});
+
+function resetFx(){
+  clearRT();
+  if(mode!=='normal'){if(sel)say(INFO[sel][0],INFO[sel][1]);else say(DEF[0],DEF[1])}
+  mode='normal';
+  Object.keys(D).forEach(function(k){['failed','warn','restored','rewind'].forEach(function(c){cls(D[k],c,false)})});
+  cls(svg,'fire',false);cls(svg,'vpnbroken',false);
+  $('#dRes').className='';$('#dNote').textContent='';$('#bRest').disabled=true;
+  $$('[data-sc]').forEach(function(b){b.disabled=false});
+}
+function setStep(n){
+  resetFx();step=Math.max(0,Math.min(3,n));
+  cls(D.lap1,'active',true);cls(D.lap2,'active',true);
+  cls(D.srv,'active',step>=1);cls(D.z1,'active',step>=1);cls(D.z2,'active',step>=1);
+  cls(D.nas,'active',step>=2);cls(D.drv,'active',step>=3);cls(D.net,'active',step>=3||remote);
+  renderFlows(flowsFor(step),[]);
+  ui();
+}
+function ui(){
+  $$('.chip').forEach(function(c){var i=+c.dataset.i;cls(c,'cur',i===step);cls(c,'done',i<step)});
+  var cop=step+1,med=step===0?1:(step<3?2:3),ext=step>=3?1:0;
+  $('#bCop b').textContent=cop;$('#bMed b').textContent=med;$('#bExt b').textContent=ext;
+  cls($('#bCop'),'ok',cop>=3);cls($('#bMed'),'ok',med>=2);cls($('#bExt'),'ok',ext>=1);
+  $('#stT').textContent=STEPS[step].t;$('#stD').textContent=STEPS[step].d;
+  cls($('#banner'),'show',step===3);
+  $('#bPrev').disabled=step===0;$('#bNext').disabled=step===3;
+}
+
+/* ubicación de las laptops: en casa (LAN) o fuera de casa (Internet + VPN) */
+function setRemote(b){
+  remote=b;cls(svg,'remote',b);
+  cls($('#band'),'rem',b);cls($('#bandLbl'),'rem',b);
+  $('#bandLbl').textContent=b?'TUS LAPTOPS · FUERA DE CASA (otra red)':'TUS LAPTOPS · EN CASA (WiFi / red local)';
+  $$('[data-loc]').forEach(function(x){cls(x,'act',(x.dataset.loc==='remote')===b)});
+  setStep(step);
+}
+$$('[data-loc]').forEach(function(x){x.addEventListener('click',function(){setRemote(x.dataset.loc==='remote')})});
+
+function stopPlay(){playing=false;clearTimeout(timer);$('#bPlay').textContent='▶ Reproducir'}
+function tick(){
+  if(!playing)return;
+  if(step<3){setStep(step+1);timer=setTimeout(tick,4800/spd())}else{stopPlay()}
+}
+$('#bPlay').addEventListener('click',function(){
+  if(playing){stopPlay();return}
+  if(mode!=='normal'||step>=3){setStep(0)}
+  playing=true;$('#bPlay').textContent='⏸ Pausa';timer=setTimeout(tick,1800/spd());
+});
+$('#bNext').addEventListener('click',function(){stopPlay();setStep(step+1)});
+$('#bPrev').addEventListener('click',function(){stopPlay();setStep(step-1)});
+$('#bReset').addEventListener('click',function(){stopPlay();setStep(0);sel=null;Object.keys(D).forEach(function(n){cls(D[n],'sel',false)});say(DEF[0],DEF[1])});
+$('#spd').addEventListener('input',function(){root.style.setProperty('--speed',spd());$('#spdv').textContent=spd()+'×'});
+
+/* desastres */
+var cur=null;
+$$('[data-sc]').forEach(function(b){b.addEventListener('click',function(){runSc(b.dataset.sc)})});
+function runSc(k){
+  stopPlay();
+  if(SC[k].forceRemote&&!remote)setRemote(true);
+  var s=scFor(k);cur=s;
+  setStep(3);clearRT();mode='disaster';
+  renderFlows([],[]);
+  s.fail.forEach(function(id){cls(D[id],'active',false);cls(D[id],s.mark,true)});
+  if(s.fire)cls(svg,'fire',true);
+  if(s.broken)cls(svg,'vpnbroken',true);
+  $('#dMsg').textContent=s.msg;$('#dRes').className='show';$('#dNote').textContent='';say(s.t,s.msg,'am');
+  $('#bRest').disabled=false;
+}
+$('#bRest').addEventListener('click',function(){
+  if(!cur||mode!=='disaster')return;
+  var s=cur;mode='restoring';$('#bRest').disabled=true;
+  $$('[data-sc]').forEach(function(b){b.disabled=true});
+  var t=0,dur=3300/spd();
+  s.restore.forEach(function(st,i){
+    rtimers.push(setTimeout(function(){
+      $('#dNote').textContent=st.note;say('Restaurando…',st.note,'gr');
+      if(st.flows)renderFlows([],st.flows);
+      if(st.fx==='rewind')st.heal.forEach(function(x){cls(D[x],'rewind',true)});
+    },t));
+    rtimers.push(setTimeout(function(){
+      renderFlows([],[]);
+      st.heal.forEach(function(x){cls(D[x],'rewind',false);cls(D[x],'failed',false);cls(D[x],'warn',false);cls(D[x],'restored',true)});
+      if(i===0)cls(svg,'fire',false);
+      if(st.unbreak)cls(svg,'vpnbroken',false);
+    },t+dur));
+    t+=dur+500/spd();
+  });
+  rtimers.push(setTimeout(function(){
+    $('#dNote').textContent='✔ '+s.done;$('#dRes').className='show good';
+    $('#dMsg').textContent='Recuperación completa. '+s.done+' Haz una restauración de prueba de vez en cuando para confirmar que tus copias realmente funcionan.';
+    say('✔ Recuperación completa',s.done+' Con 3-2-1, siempre quedó al menos una copia sana.','gr');
+    mode='done';$$('[data-sc]').forEach(function(b){b.disabled=false});
+  },t));
+});
+
+var coarse=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
+var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+if(!coarse&&!reduce){
+  stage.addEventListener('pointermove',function(e){
+    var r=stage.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;
+    $('#hud').style.setProperty('--rx',(-y*5).toFixed(2)+'deg');$('#hud').style.setProperty('--ry',(x*7).toFixed(2)+'deg');
+  });
+  stage.addEventListener('pointerleave',function(){$('#hud').style.setProperty('--rx','0deg');$('#hud').style.setProperty('--ry','0deg')});
+}
+
+var stream=null;
+function toast(m){var t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show')},4200)}
+$('#bCam').addEventListener('click',function(){
+  if(stream){stream.getTracks().forEach(function(t){t.stop()});stream=null;stage.classList.remove('ar-on');$('#cam').srcObject=null;$('#bCam').textContent='📷 Modo AR con cámara';return}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('Tu navegador no permite usar la cámara aquí. Se mantiene la vista holográfica.');return}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false}).then(function(s){
+    stream=s;$('#cam').srcObject=s;stage.classList.add('ar-on');$('#bCam').textContent='📷 Salir del modo AR';
+  }).catch(function(){toast('No se pudo activar la cámara (permiso denegado o no disponible). Se mantiene la vista holográfica.')});
+});
+
+setStep(0);
+})();
+</script>
+</body>
+</html>
